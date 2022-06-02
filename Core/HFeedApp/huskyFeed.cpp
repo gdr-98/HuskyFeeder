@@ -51,7 +51,7 @@ struct HuskyFeed_CFG&  HuskyFeed_CFG ::operator=(const struct HuskyFeed_CFG& a)
 void HuskyFeed_CFG::to_cstring(char* const to_ret){
     char temp[32];
     uint16_t idx;
-    sprintf(to_ret," Mode: %s \n Quantity %lu \n NumDeadlines %lu :\n Deadlines: \n ",
+    sprintf(to_ret," Mode: %s \n Quantity %u \n NumDeadlines %u :\n Deadlines: \n ",
         mode_to_cstr(this->mode),this->food_quantity,this->deadlines_num);
     for(idx=0;idx<this->deadlines_num;idx++){
         sprintf(temp,"idx: %u h: %u m: %u s: %u \n ",idx,

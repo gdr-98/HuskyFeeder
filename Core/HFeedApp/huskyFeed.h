@@ -140,7 +140,7 @@ const struct HuskyFeed_CFG default_cfg={
         default:                            \
             out_state=WAIT_FOR_MODE;        \
             in_mode=HUSKY_FEED_MODE_BLANK;  \
-            break;                          \   
+            break;                          \
     }                                       \
 }
 
