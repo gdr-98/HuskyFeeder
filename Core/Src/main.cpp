@@ -23,16 +23,20 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #define TIME_TEST 	0
-#define WEIGHT_TEST 1
+#define WEIGHT_TEST 0
 #define BALANCE_OFFSET	198700
 #define BALANCE_RATIO	339
+#define RUN_APP			0
+
 #if TIME_TEST
 #include "port_time.h"
 #endif
 #if WEIGHT_TEST
 #include "port_weight.h"
 #endif
-
+#if RUN_APP
+#include "huskyFeed.h"
+#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,8 +60,11 @@ TIM_HandleTypeDef htim11;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint16_t counter=0;
-char snd[512];
+uint16_t counter=0; // to remove
+char snd[512];		// to remove
+#if RUN_APP
+HuskyFeeder app;
+#endif
 //char *snd= "hi";
 
 /* USER CODE END PV */
@@ -69,6 +76,9 @@ static void MX_TIM11_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM7_Init(void);
 static void MX_NVIC_Init(void);
+#if RUN_APP
+static void AppInit(void);
+#endif
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -133,7 +143,7 @@ int main(void)
   offset.minutes=1;
   offset.seconds=0;
   deadline=start+offset;
-  Tim_Helper h=Tim_Helper::GetNew();
+  HFeed_TimeManager h;
   h.start(start);
   TimeObj now;
   uint32_t n_millis;
@@ -179,7 +189,7 @@ int main(void)
 	  	  	sprintf(snd,"h: %u m : %u s: %u  \n \r",now.hours,now.minutes,now.seconds);
 	  	  	HAL_UART_Transmit(&huart2,(uint8_t*)snd,strlen(snd)+1,100);
 	  	  	HAL_Delay(100);*/
-	  now=millis_to_Hours(n_millis, h.start_millis)+h.start_time;
+	  now=millis_to_TimeObj(n_millis, h.start_millis)+h.start_time;
 	  sprintf(snd," h: %u m : %u s: %u  ,ctr %u\n \r",now.hours,now.minutes,now.seconds,time_counter);
 	  if (h.is_greater(deadline)){
 		 time_counter++;
@@ -431,7 +441,13 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+#if RUN_APP
+static void AppInit(void){
+	app=HuskyFeeder::getFeeder();
+	app.setTimeHelper(manager);
+	app.setWeightManager(manager);
+}
+#endif
 /* USER CODE END 4 */
 
 /**

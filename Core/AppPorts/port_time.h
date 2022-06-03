@@ -18,16 +18,24 @@ struct tim{
 };
 
 typedef struct tim TimeObj;
-TimeObj millis_to_Hours(hfeed_millis_type  ,hfeed_millis_type );
+TimeObj millis_to_TimeObj(hfeed_millis_type  ,hfeed_millis_type );
 struct Tim_Helper{
 	TimeObj start_time;
 	hfeed_millis_type start_millis;
-	static struct Tim_Helper& GetNew();
+	/*static struct Tim_Helper& GetNew();*/
 	inline void start(const TimeObj&start ){	start_time=start;	start_millis=HFEED_TIME_GET_CURR_MILLIS;}
 	inline void reset(){ start_time.seconds=0;start_time.minutes=0;start_time.hours=0;  start_millis=0;}
 	// checks if now > cmp
-	inline bool is_greater(const TimeObj& to_cmp){ return ( millis_to_Hours(HFEED_TIME_GET_CURR_MILLIS,start_millis)+start_time )>=to_cmp;}
+	inline bool is_greater(const TimeObj& to_cmp){ return ( millis_to_TimeObj(HFEED_TIME_GET_CURR_MILLIS,start_millis)+start_time )>=to_cmp;}
+	inline bool is_greater(uint8_t h,uint8_t m,uint8_t s){
+		TimeObj to_cmp={
+				.seconds=s,
+				.minutes=m,
+				.hours=h,
+		};
+		return ( millis_to_TimeObj(HFEED_TIME_GET_CURR_MILLIS,start_millis)+start_time )>=to_cmp;
+	}
 };
-typedef struct Tim_Helper Hfeed_Tim_Helper;
+typedef struct Tim_Helper HFeed_TimeManager;
 
 #endif

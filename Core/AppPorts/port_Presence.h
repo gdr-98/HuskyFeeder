@@ -1,5 +1,5 @@
-#ifndef	PORT_SERVO
-#define	PORT_SERVO
+#ifndef	PORT_PRESENCE
+#define	PORT_PRESENCE
 /*********************
  * FILE DESCR:
  *

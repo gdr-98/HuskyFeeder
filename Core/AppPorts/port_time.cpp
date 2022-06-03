@@ -9,6 +9,7 @@ bool TimeObj:: operator >=(const TimeObj &b){
 		return true;
 	return   (this->hours>b.hours) || ((this->hours==b.hours)&& (this->minutes>b.minutes)) || ((this->hours==b.hours)&& (this->minutes==b.minutes)&&(this->seconds>b.seconds));
 }
+
 TimeObj operator+(const struct tim& a, const struct tim& b){
 	// all divisions should be floored
 	struct tim to_ret;
@@ -20,15 +21,16 @@ TimeObj operator+(const struct tim& a, const struct tim& b){
 	to_ret.hours=(hours_sum+(min_sum/60))%24;
 	return to_ret;
 }
-Hfeed_Tim_Helper& Hfeed_Tim_Helper::GetNew(){
+/*
+HFeed_TimeManager& HFeed_TimeManager::GetNew(){
 	static struct Tim_Helper k;
 	k.start_millis=0;
 	k.start_time.hours=0;
 	k.start_time.minutes=0;
 	k.start_time.seconds=0;
 	return k;
-}
-TimeObj millis_to_Hours(hfeed_millis_type end_time ,hfeed_millis_type start_time){
+}*/
+TimeObj millis_to_TimeObj(hfeed_millis_type end_time ,hfeed_millis_type start_time){
 	TimeObj to_ret={
 			.seconds=0,
 			.minutes=0,

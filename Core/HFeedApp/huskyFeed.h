@@ -37,13 +37,13 @@
  * 
  *  4-  WAIT_FOR_DOG        =   In this state we're waiting the dog to come near the structure.  
  * *****************/
-#define HUSKY_FEED_MODE_MANUAL      0
-#define HUSKY_FEED_MODE_TIME        1
-#define HUSKY_FEED_MODE_AUTOMATIC   2
-#define HUSKY_FEED_MODE_BLANK       3   //  This mode is used only internally to express a mode in which the application does nothing
+#define HFEED_MODE_MANUAL      0
+#define HFEED_MODE_TIME        1
+#define HFEED_MODE_AUTOMATIC   2
+#define HFEED_MODE_BLANK       3   //  This mode is used only internally to express a mode in which the application does nothing
 
 #define HUSKY_FEED_NUM_STATES 4
-enum HuskyFeed_State{
+enum HFeed_State{
     WAIT_FOR_MODE=0,
     SERVING=1,
     WAIT_FOR_DEADLINE=2,
@@ -51,7 +51,7 @@ enum HuskyFeed_State{
 };
 
 // Macro that checks if the mode is valid
-#define IS_VALID_MODE(mode)   (mode == HUSKY_FEED_MODE_MANUAL) || (mode == HUSKY_FEED_MODE_TIME) || (mode == HUSKY_FEED_MODE_AUTOMATIC)||(mode == HUSKY_FEED_MODE_BLANK)         
+#define IS_VALID_MODE(mode)   (mode == HFEED_MODE_MANUAL) || (mode == HFEED_MODE_TIME) || (mode == HFEED_MODE_AUTOMATIC)||(mode == HFEED_MODE_BLANK)
 
 // Convert a num to a state
 #define NUM_TO_STATE(num)    static_cast<HUSKY_FEED_STATE>(num)
@@ -63,7 +63,7 @@ enum HuskyFeed_State{
 //  Checks if the number of deadline is valid 
 #define IS_DEADLINES_NUM_VALID(dealines_num) deadlines_num<=DEADLINES_UB
 
-const char* state_to_cstr(const HuskyFeed_State&) ;
+const char* state_to_cstr(const HFeed_State&) ;
 const char* mode_to_cstr(const uint8_t&);
 
 
@@ -82,9 +82,9 @@ struct HuskyFeed_CFG{
     uint8_t     deadlines_minutes[DEADLINES_UB];
     uint8_t     deadlines_seconds[DEADLINES_UB];
     //Starting hour
-    uint8_t     starting_hours[DEADLINES_UB];
-    uint8_t     starting_minutes[DEADLINES_UB];
-    uint8_t     starting_seconds[DEADLINES_UB];
+    uint8_t     starting_hours;
+    uint8_t     starting_minutes;
+    uint8_t     starting_seconds;
 
     //  Tells if the configuration must persist after the last deadline, 
     //  it is periodic if this field is >0
@@ -95,12 +95,15 @@ struct HuskyFeed_CFG{
     void   to_cstring(char* const );
 };
 const struct HuskyFeed_CFG default_cfg={
-    .mode=HUSKY_FEED_MODE_BLANK,
+    .mode=HFEED_MODE_BLANK,
     .food_quantity=0,
     .deadlines_num=0,
     .deadlines_hours={0},
     .deadlines_minutes={0},
     .deadlines_seconds={0},
+	.starting_hours=0,
+	.starting_minutes=0,
+	.starting_seconds=0,
     .periodic=0
 };
 
@@ -128,18 +131,18 @@ const struct HuskyFeed_CFG default_cfg={
  * */
 #define HUSKY_FEED_MOD_TO_STATE(in_mode,out_state){     \
     switch(in_mode){                        \
-        case HUSKY_FEED_MODE_MANUAL:        \
+        case HFEED_MODE_MANUAL:        \
             out_state=SERVING;              \
             break;                          \
-        case HUSKY_FEED_MODE_TIME:          \
+        case HFEED_MODE_TIME:          \
             out_state=WAIT_FOR_DEADLINE;    \
             break;                          \
-        case HUSKY_FEED_MODE_AUTOMATIC:     \
+        case HFEED_MODE_AUTOMATIC:     \
             out_state=WAIT_FOR_LOPPIDEH;    \
             break;                          \
         default:                            \
             out_state=WAIT_FOR_MODE;        \
-            in_mode=HUSKY_FEED_MODE_BLANK;  \
+            in_mode=HFEED_MODE_BLANK;  		\
             break;                          \
     }                                       \
 }
@@ -156,9 +159,17 @@ class HuskyFeeder{
     public:
         /****   Members ****/
         struct HuskyFeed_CFG    current_configuration;
-        HuskyFeed_State         current_state;
+        HFeed_State         	current_state;
         uint16_t                deadline_ctr;
-
+        //	HW managers
+        HFeed_WeightManager*	weight_manager=0;
+        HFeed_TimeManager*		time_manager=0;
+        // HW Configuration of the weighter sysstem
+        uint32_t				weight_ms=100;
+        uint16_t				weight_samples=10; // note that the ms to wait refers to only one sample
+        // Serving Timeout
+        // Waits two minutes, if the reaching
+        uint32_t				serving_timeout_ms=120000;
         static HuskyFeeder& getFeeder(){
             static HuskyFeeder globalFeeder;
             return globalFeeder;
@@ -172,10 +183,17 @@ class HuskyFeeder{
             strcat(k,state_to_cstr(this->current_state));
 
         }
-        inline void changeCFG(const struct HuskyFeed_CFG& to_set){ 
-            current_configuration=to_set;
-            HUSKY_FEED_MOD_TO_STATE(current_configuration.mode,current_state);
-            deadline_ctr=0;
+        void changeCFG(const struct HuskyFeed_CFG& to_set);
+
+        //	This fn serves to change the number of ms to wait for measure completion and the number of samples
+        //	to be taken.
+        inline bool change_Weight_cfg(uint32_t ms,uint16_t samples){
+        	if(ms!=0 && samples!=0){
+        		weight_ms=ms;
+        		weight_samples=samples;
+        		return true;
+        	}
+        	return false;
         }
         inline void hf_reset(){
             current_state=WAIT_FOR_MODE;
@@ -185,7 +203,10 @@ class HuskyFeeder{
         //  Methods not desired
         HuskyFeeder(HuskyFeeder const&)     = delete;
         void operator=(HuskyFeeder const&)  = delete;
-
+        // HW managers
+        bool setWeightManager(HFeed_WeightManager* manager);
+        bool setTimeHelper(Tim_Helper*h);
+        // Operations
         inline void exec_wait_for_mode(){};
         void exec_serving();
         void exec_wait_for_deadline();
@@ -195,4 +216,11 @@ class HuskyFeeder{
         }
 
 };
+
+/***********************
+ * 	FUTURE FEATURES:
+ * 	1-	Give  a timed configuration for the next day
+ * 	2-	Timed+ automatic
+ *************************/
 #endif
+
