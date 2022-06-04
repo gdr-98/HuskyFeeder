@@ -15,6 +15,8 @@
   *
   **************************
   */
+#define TRASH_MAIN 0
+#if TRASH_MAIN
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -26,10 +28,17 @@
 #define WEIGHT_TEST 0
 #define BALANCE_OFFSET	198700
 #define BALANCE_RATIO	339
-#define RUN_APP			1
+#define RUN_APP			0
 
-
+#if TIME_TEST
+#include "port_time.h"
+#endif
+#if WEIGHT_TEST
+#include "port_weight.h"
+#endif
+#if RUN_APP
 #include "huskyFeed.h"
+#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,21 +56,17 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-TIM_HandleTypeDef htim7;
+ TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim11;
-TIM_HandleTypeDef htim12;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-// The app we're using
+uint16_t counter=0; // to remove
+char snd[512];		// to remove
+#if RUN_APP
 HuskyFeeder app;
-// Our Managers
-HFeed_WeightManager weight_manager;
-HFeed_PresenceManager presence_manager;
-HFeed_TimeManager	time_manager;
-// The Drivers
-HX711_Driver	hx711_driver;
-hcsr04_driver	hcsr04_driver;
+#endif
 //char *snd= "hi";
 
 /* USER CODE END PV */
@@ -72,14 +77,24 @@ static void MX_GPIO_Init(void);
 static void MX_TIM11_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM7_Init(void);
-static void MX_TIM12_Init(void);
+static void MX_NVIC_Init(void);
+#if RUN_APP
 static void AppInit(void);
+#endif
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if(GPIO_Pin==PIR_PIN_Pin){
+		counter++;
+		sprintf(snd," Counter value: %u \n \r",counter);
+		HAL_UART_Transmit(&huart2,(uint8_t*)snd,strlen(snd)+1,10);
+		HAL_GPIO_TogglePin(BOARD_LED_GPIO_Port,BOARD_LED_Pin);
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -113,26 +128,107 @@ int main(void)
   MX_TIM11_Init();
   MX_USART2_UART_Init();
   MX_TIM7_Init();
-  MX_TIM12_Init
+
   /* Initialize interrupts */
-  //MX_NVIC_Init();
+  MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim11, TIM_CHANNEL_1);
   HAL_TIM_Base_Start(&htim7);
-  HAL_TIM_IC_Start(&htim12, TIM_CHANNEL_1);
   //HFEED_SERVO_MCU_SET_PWM_CFG(&htim11);
 //  HFEED_SERVO_MCU_SET_TIMCH(TIM_CHANNEL_1);
+#if TIME_TEST
+  TimeObj start,deadline,offset;
+  start.hours=10;
+  start.minutes=25;
+  start.seconds=0;
+  offset.hours=0;
+  offset.minutes=1;
+  offset.seconds=0;
+  deadline=start+offset;
+  HFeed_TimeManager h;
+  h.start(start);
+  TimeObj now;
+  uint32_t n_millis;
+  uint32_t time_counter=0;
+  //,diff_millis;
+  //uint8_t hour,m,s;
+#endif
+#if WEIGHT_TEST
+  char u_buff[512];
+  uint32_t ctr=0;
 
+  HX711_Driver my_driver(HX711_PD_SCK_GPIO_Port,HX711_PD_SCK_Pin,HX_711_DOUT_GPIO_Port,HX_711_DOUT_Pin,CFG_IN_A_GAIN_128);
+  //my_driver.hx711_hal_stm42_set_debugger(&huart2);
+  my_driver.hx711_hal_stm42_set_timer(&htim7);
+  my_driver.reset();
+  my_driver.set_intercept(BALANCE_OFFSET);
+  my_driver.set_gradient(BALANCE_RATIO);
+  bool valid=false;
+  double readings_avg;
+  WeightManager m;
+  m.set_ptr(&my_driver);
+#if UINT_RAPPR
+  uint32_t readings=0;
+#else
+  int32_t readings=0;
+#endif
+#endif
   /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+#if TIME_TEST
+
+	  	  	n_millis=HAL_GetTick();
+	  		//	calculating difference in seconds
+	/*  		hfeed_millis_type difference= (n_millis-h.start_millis)/1000;
+	  		sprintf(snd," n: %u s: %u  diff: %lu \n \r",n_millis,h.start_millis,difference);
+	  		 HAL_UART_Transmit(&huart2,(uint8_t*)snd,strlen(snd)+1,100);
+	  		HAL_Delay(10);
+	  		now=millis_to_Hours(n_millis, h.start_millis)+h.start_time;
+	  	  	sprintf(snd,"h: %u m : %u s: %u  \n \r",now.hours,now.minutes,now.seconds);
+	  	  	HAL_UART_Transmit(&huart2,(uint8_t*)snd,strlen(snd)+1,100);
+	  	  	HAL_Delay(100);*/
+	  now=millis_to_TimeObj(n_millis, h.start_millis)+h.start_time;
+	  sprintf(snd," h: %u m : %u s: %u  ,ctr %u\n \r",now.hours,now.minutes,now.seconds,time_counter);
+	  if (h.is_greater(deadline)){
+		 time_counter++;
+		 h.start(now);
+		 deadline=deadline+offset;
+	  }
+	  HAL_UART_Transmit(&huart2,(uint8_t*)snd,strlen(snd)+1,100);
+	  HAL_Delay(100);
+#endif
+#if WEIGHT_TEST
+
+	  valid=m.get_measure(100,readings_avg,10);
+	  //readings=my_driver.read(100,valid);
+	  if(valid){
+		 ctr++;
+		 sprintf(u_buff,"Value %f , %lu ** \n\r", readings_avg,ctr);
+		// sprintf(u_buff," ** Value %f Grams: %f  %lu ** \n\r", readings_avg,(readings_avg-BALANCE_OFFSET)/BALANCE_RATIO,ctr);
+/*#if UINT_RAPPR
+		 sprintf(u_buff,"Value %lu  %lu ** \n\r", readings,ctr);
+#else
+		 sprintf(u_buff,"Value %ld  %lu ** \n \r", readings,ctr);
+#endif*/
+
+	  }
+	  else{
+		sprintf(u_buff,"Waiting %lu ** \n\r ",ctr);
+	  }
+	  //sprintf(u_buff,"Waiting %lu ** \r\n",ctr);
+	  HAL_UART_Transmit(&huart2,(uint8_t*)u_buff,strlen(u_buff),100);
+	  HAL_Delay(200);
+#endif
 	  /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
+
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -178,6 +274,17 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief NVIC Configuration.
+  * @retval None
+  */
+static void MX_NVIC_Init(void)
+{
+  /* EXTI0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 }
 
 /**
@@ -265,47 +372,6 @@ static void MX_TIM11_Init(void)
 }
 
 /**
-  * @brief TIM12 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM12_Init(void)
-{
-
-  /* USER CODE BEGIN TIM12_Init 0 */
-
-  /* USER CODE END TIM12_Init 0 */
-
-  TIM_IC_InitTypeDef sConfigIC = {0};
-
-  /* USER CODE BEGIN TIM12_Init 1 */
-
-  /* USER CODE END TIM12_Init 1 */
-  htim12.Instance = TIM12;
-  htim12.Init.Prescaler = 83;
-  htim12.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim12.Init.Period = 65535;
-  htim12.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim12.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_IC_Init(&htim12) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
-  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
-  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
-  if (HAL_TIM_IC_ConfigChannel(&htim12, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM12_Init 2 */
-
-  /* USER CODE END TIM12_Init 2 */
-
-}
-
-/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -354,9 +420,6 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, BOARD_LED_Pin|HX711_PD_SCK_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(HCSR04_TRIGGER_GPIO_Port, HCSR04_TRIGGER_Pin, GPIO_PIN_RESET);
-
   /*Configure GPIO pins : BOARD_LED_Pin HX711_PD_SCK_Pin */
   GPIO_InitStruct.Pin = BOARD_LED_Pin|HX711_PD_SCK_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -364,12 +427,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : HCSR04_TRIGGER_Pin */
-  GPIO_InitStruct.Pin = HCSR04_TRIGGER_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  /*Configure GPIO pin : PIR_PIN_Pin */
+  GPIO_InitStruct.Pin = PIR_PIN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(HCSR04_TRIGGER_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(PIR_PIN_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : HX_711_DOUT_Pin */
   GPIO_InitStruct.Pin = HX_711_DOUT_Pin;
@@ -382,36 +444,9 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 #if RUN_APP
 static void AppInit(void){
-	// First of all, init the drivers
-
-	//Presence Sensor
-	hcsr04_driver(HCSR04_TRIGGER_GPIO_Port,HCSR04_TRIGGER_Pin);
-	//Weight Sensor
-	hx711_driver(HX711_PD_SCK_GPIO_Port,HX711_PD_SCK_Pin,HX_711_DOUT_GPIO_Port,HX_711_DOUT_Pin,CFG_IN_A_GAIN_128);
-	hx711_driver.hx711_hal_stm42_set_timer(&htim7);
-	hx711_driver.reset();
-	hx711_driver.set_intercept(BALANCE_OFFSET);
-	hx711_driver.set_gradient(BALANCE_RATIO);
-	//Inizializing Managers..
-	//	Presence Manager
-	presence_manager.Driver=&hcsr04_driver;
-	presence_manager.soglia=SOGLIA;
-	presence_manager.last_time_measure=0;
-	//	Time Manager
-	time_manager.reset();
-	//	Weight Manager
-	weight_manager.set_ptr(hx711_driver);
-	//	Motor
-	HFEED_SERVO_MCU_SET_PWM_CFG(&htim11);
-	HFEED_SERVO_MCU_SET_TIMCH(TIM_CHANNEL_1);
-	//	Now the App
 	app=HuskyFeeder::getFeeder();
-	if(app.setTimeManager(&time_manager))
-		Error_Handler();
-	if(app.setWeightManager(&weight_manager))
-		Error_Handler();
-	if(app.setPresenceManager(&presence_manager))
-		Error_Handler();
+	app.setTimeHelper(manager);
+	app.setWeightManager(manager);
 }
 #endif
 /* USER CODE END 4 */
@@ -446,4 +481,5 @@ void assert_failed(uint8_t *file, uint32_t line)
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
+#endif
 #endif /* USE_FULL_ASSERT */

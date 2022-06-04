@@ -164,6 +164,7 @@ class HuskyFeeder{
         //	HW managers
         HFeed_WeightManager*	weight_manager=0;
         HFeed_TimeManager*		time_manager=0;
+        HFeed_PresenceManager*	presence_manager=0;
         // HW Configuration of the weighter sysstem
         uint32_t				weight_ms=100;
         uint16_t				weight_samples=10; // note that the ms to wait refers to only one sample
@@ -204,8 +205,9 @@ class HuskyFeeder{
         HuskyFeeder(HuskyFeeder const&)     = delete;
         void operator=(HuskyFeeder const&)  = delete;
         // HW managers
-        bool setWeightManager(HFeed_WeightManager* manager);
-        bool setTimeHelper(Tim_Helper*h);
+        bool setWeightManager(HFeed_WeightManager* );
+        bool setTimeManager(Tim_Helper*);
+        bool setPresenceManager(HFeed_PresenceManager*);
         // Operations
         inline void exec_wait_for_mode(){};
         void exec_serving();

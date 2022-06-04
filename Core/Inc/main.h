@@ -65,9 +65,10 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define BOARD_LED_Pin GPIO_PIN_5
 #define BOARD_LED_GPIO_Port GPIOA
-#define PIR_PIN_Pin GPIO_PIN_0
-#define PIR_PIN_GPIO_Port GPIOB
-#define PIR_PIN_EXTI_IRQn EXTI0_IRQn
+#define HCSR04_ECHO_Pin GPIO_PIN_14
+#define HCSR04_ECHO_GPIO_Port GPIOB
+#define HCSR04_TRIGGER_Pin GPIO_PIN_15
+#define HCSR04_TRIGGER_GPIO_Port GPIOB
 #define HX_711_DOUT_Pin GPIO_PIN_8
 #define HX_711_DOUT_GPIO_Port GPIOA
 #define HX711_PD_SCK_Pin GPIO_PIN_9

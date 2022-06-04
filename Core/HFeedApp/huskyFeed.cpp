@@ -91,19 +91,36 @@ void HuskyFeeder::changeCFG(const struct HuskyFeed_CFG& to_set){
     	}
 
     }
+    else if(this->current_state==HFeed_State::WAIT_FOR_LOPPIDEH){
+    	if(this->presence_manager==0)
+    		this->hf_reset();
+    	else{
+    		this->presence_manager->start_measurement();
+    	}
+    }
 }
+
 bool HuskyFeeder::setWeightManager(HFeed_WeightManager* manager){
 	if (manager==0)
 		return false;
 	weight_manager=manager;
 	return true;
 }
-bool HuskyFeeder::setTimeHelper(HFeed_TimeManager*manager){
+
+bool HuskyFeeder::setTimeManager(HFeed_TimeManager*manager){
 	if (manager==0)
 		return false;
 	time_manager=manager;
 	return true;
 }
+
+bool HuskyFeeder::setPresenceManager(HFeed_PresenceManager* manager){
+	if (manager==0)
+		return false;
+	presence_manager=manager;
+	return true;
+}
+
 //	Serve food to the dog.
 void HuskyFeeder::exec_serving(){
 
@@ -144,6 +161,8 @@ void HuskyFeeder::exec_serving(){
 		this->hf_reset();
 
 }
+
+// Waits until the next dealine and then serve the dog
 void HuskyFeeder::exec_wait_for_deadline(){
 	if(this->current_state!=HFeed_State::SERVING)
 		return ;
@@ -168,8 +187,15 @@ void HuskyFeeder::exec_wait_for_deadline(){
 	}
 
 }
-void HuskyFeeder::exec_wait_for_BAUBAU(){
 
+// Waits until the dog comes close and then serve the food
+void HuskyFeeder::exec_wait_for_BAUBAU(){
+	if (this->presence_manager==0)
+		return ;
+	if(this->presence_manager->is_dog_present()){
+		this->current_state=HFeed_State::SERVING;
+		this->exec_serving();
+	}
 }
 
 HuskyFeeder::HuskyFeeder(){
