@@ -51,7 +51,7 @@ static	uint16_t			stm32_tim_channel;
 //	On stm32 this macro takes the tim cfg in input, the timer should be already configured and started with HAL PWM STARTs
 #define	HFEED_SERVO_MCU_SET_PWM_CFG(cfg){	\
 		if(cfg==0)							\
-			Error_Handler();					\
+			Error_Handler();				\
 		my_timer=cfg;						\
 }
 

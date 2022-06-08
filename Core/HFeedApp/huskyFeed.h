@@ -202,8 +202,8 @@ class HuskyFeeder{
             deadline_ctr=0;
         }
         //  Methods not desired
-        HuskyFeeder(HuskyFeeder const&)     = delete;
-        void operator=(HuskyFeeder const&)  = delete;
+       // HuskyFeeder(HuskyFeeder const&)     = delete;
+        //void operator=(HuskyFeeder const&)  = delete;
         // HW managers
         bool setWeightManager(HFeed_WeightManager* );
         bool setTimeManager(Tim_Helper*);

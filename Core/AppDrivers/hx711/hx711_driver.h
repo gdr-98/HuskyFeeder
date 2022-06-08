@@ -5,7 +5,7 @@
 //MCU STUFF
 #include "mcu_defs.h"
 #define HX711_DBG	0
-#define UINT_RAPPR	0
+#define UINT_RAPPR	1
 
 #if HX711_DBG
 #include "string.h"

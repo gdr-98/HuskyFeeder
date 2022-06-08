@@ -1,7 +1,7 @@
 /* USER CODE BEGIN Header */
 /**
   **************************
-  * @file           : main.c
+  * @file           : main.cpp
   * @brief          : Main program body
   **************************
   * @attention
@@ -24,12 +24,14 @@
 /* USER CODE BEGIN Includes */
 #define TIME_TEST 	0
 #define WEIGHT_TEST 0
-#define BALANCE_OFFSET	198700
-#define BALANCE_RATIO	339
+#define BALANCE_OFFSET	8584000 //Measuring done in Antonio's room desk , with a plate of 125 grams and a known obj of 188 grams
+#define BALANCE_RATIO	2.56
 #define RUN_APP			1
 
 
 #include "huskyFeed.h"
+#include "hx711_driver.h"
+#include "hcsr04_driver.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,17 +55,22 @@ TIM_HandleTypeDef htim12;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-// The app we're using
-HuskyFeeder app;
-// Our Managers
-HFeed_WeightManager weight_manager;
-HFeed_PresenceManager presence_manager;
-HFeed_TimeManager	time_manager;
-// The Drivers
-HX711_Driver	hx711_driver;
-hcsr04_driver	hcsr04_driver;
-//char *snd= "hi";
+#if RUN_APP
 
+//Dbg flags and utils
+#define APP_DBG	1
+#if APP_DBG
+char dbg_buff[256];
+#endif
+
+//Calibration flag
+#define CALIBRATION 1
+#if CALIBRATION
+double avg=0;
+bool valid=false;
+#endif
+
+#endif
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,7 +80,6 @@ static void MX_TIM11_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM7_Init(void);
 static void MX_TIM12_Init(void);
-static void AppInit(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -113,22 +119,90 @@ int main(void)
   MX_TIM11_Init();
   MX_USART2_UART_Init();
   MX_TIM7_Init();
-  MX_TIM12_Init
+  MX_TIM12_Init();
   /* Initialize interrupts */
   //MX_NVIC_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim11, TIM_CHANNEL_1);
   HAL_TIM_Base_Start(&htim7);
   HAL_TIM_IC_Start(&htim12, TIM_CHANNEL_1);
-  //HFEED_SERVO_MCU_SET_PWM_CFG(&htim11);
-//  HFEED_SERVO_MCU_SET_TIMCH(TIM_CHANNEL_1);
+/***************** CONFIGURING APP ******************/
+#if RUN_APP
 
+  	  // First of all, init the drivers
+
+  	  //Presence  sensor
+  	  hcsr04_driver hcsr04_driver(HCSR04_TRIGGER_GPIO_Port,HCSR04_TRIGGER_Pin);
+
+  	  //Weight sensor D7-D8 8 (PA8 PA9) DOUT SCK
+  	  //Load Cell Connections: White A- Green A+ Black E- Red E+
+  	  HX711_Driver hx711_driver(HX711_PD_SCK_GPIO_Port,HX711_PD_SCK_Pin,HX_711_DOUT_GPIO_Port,HX_711_DOUT_Pin,CFG_IN_A_GAIN_128);
+  	  hx711_driver.hx711_hal_stm42_set_timer(&htim7);
+  	  hx711_driver.reset();
+  	  hx711_driver.set_intercept(BALANCE_OFFSET);
+  	  hx711_driver.set_gradient(BALANCE_RATIO);
+
+  	  //Motor
+  	  HFEED_SERVO_MCU_SET_PWM_CFG(&htim11);
+  	  HFEED_SERVO_MCU_SET_TIMCH(TIM_CHANNEL_1);
+
+  	  // Defining Managers
+  	  HFeed_WeightManager weight_manager;
+  	  HFeed_PresenceManager presence_manager;
+  	  HFeed_TimeManager	time_manager;
+
+  	  //Setting managers
+
+  	  //Presence Manager
+  	  presence_manager.Driver=&hcsr04_driver;
+  	  presence_manager.soglia=SOGLIA;
+  	  presence_manager.last_time_measure=0;
+
+  	  //Time Manager
+  	  time_manager.reset();
+
+  	  //Weight Manager
+  	  weight_manager.set_ptr(&hx711_driver);
+
+  	  //The Application
+  	  HuskyFeeder app=HuskyFeeder::getFeeder();
+  	  if(!app.setTimeManager(&time_manager))
+  		  Error_Handler();
+  	  if(!app.setWeightManager(&weight_manager))
+  		  Error_Handler();
+  	  if(!app.setPresenceManager(&presence_manager))
+  		  Error_Handler();
+#if APP_DBG
+	  sprintf(dbg_buff," Configuration done \r\n");
+	  HAL_UART_Transmit(&huart2, (uint8_t*)dbg_buff, strlen(dbg_buff), 50);
+#endif
+#endif
+  /*************** END APP CONFIG********************/
   /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
 	  /* USER CODE END WHILE */
+#if RUN_APP
+#if CALIBRATION
+	  avg=hx711_driver.read_avg(100, valid,10);
+	  if (valid){
+#if APP_DBG
+		  sprintf(dbg_buff," Value %.4f %.4f Converted  \r\n",avg, (avg-BALANCE_OFFSET)/BALANCE_RATIO);
+		  HAL_UART_Transmit(&huart2, (uint8_t*)dbg_buff, strlen(dbg_buff), 100);
+#endif
+	  }
+	  else{
+#if APP_DBG
+		  sprintf(dbg_buff," Data Invalid \r\n");
+		  HAL_UART_Transmit(&huart2, (uint8_t*)dbg_buff, strlen(dbg_buff), 100);
+#endif
+	  }
+#endif
+	  HAL_GPIO_TogglePin(BOARD_LED_GPIO_Port, BOARD_LED_Pin);
+	  HAL_Delay(100);
+#endif
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -380,40 +454,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-#if RUN_APP
-static void AppInit(void){
-	// First of all, init the drivers
-
-	//Presence Sensor
-	hcsr04_driver(HCSR04_TRIGGER_GPIO_Port,HCSR04_TRIGGER_Pin);
-	//Weight Sensor
-	hx711_driver(HX711_PD_SCK_GPIO_Port,HX711_PD_SCK_Pin,HX_711_DOUT_GPIO_Port,HX_711_DOUT_Pin,CFG_IN_A_GAIN_128);
-	hx711_driver.hx711_hal_stm42_set_timer(&htim7);
-	hx711_driver.reset();
-	hx711_driver.set_intercept(BALANCE_OFFSET);
-	hx711_driver.set_gradient(BALANCE_RATIO);
-	//Inizializing Managers..
-	//	Presence Manager
-	presence_manager.Driver=&hcsr04_driver;
-	presence_manager.soglia=SOGLIA;
-	presence_manager.last_time_measure=0;
-	//	Time Manager
-	time_manager.reset();
-	//	Weight Manager
-	weight_manager.set_ptr(hx711_driver);
-	//	Motor
-	HFEED_SERVO_MCU_SET_PWM_CFG(&htim11);
-	HFEED_SERVO_MCU_SET_TIMCH(TIM_CHANNEL_1);
-	//	Now the App
-	app=HuskyFeeder::getFeeder();
-	if(app.setTimeManager(&time_manager))
-		Error_Handler();
-	if(app.setWeightManager(&weight_manager))
-		Error_Handler();
-	if(app.setPresenceManager(&presence_manager))
-		Error_Handler();
-}
-#endif
 /* USER CODE END 4 */
 
 /**
