@@ -55,7 +55,20 @@ struct HuskyFeed_CFG&  HuskyFeed_CFG ::operator=(const struct HuskyFeed_CFG& a)
 void HuskyFeed_CFG::to_cstring(char* const to_ret){
     char temp[32];
     uint16_t idx;
-    sprintf(to_ret," Mode: %s \n Quantity %u \n NumDeadlines %u :\n Deadlines: \n ",
+#if HFEED_UART_FMT
+    sprintf(to_ret," Mode: %s \r \n Quantity %u \r \n NumDeadlines  :%u \r \n Deadlines: \r \n ",
+        mode_to_cstr(this->mode),this->food_quantity,this->deadlines_num);
+    for(idx=0;idx<this->deadlines_num;idx++){
+        sprintf(temp,"idx: %u h: %u m: %u s: %u \r \n ",idx,
+            this->deadlines_hours[idx],this->deadlines_minutes[idx],this->deadlines_seconds[idx]);
+        strcat(to_ret,temp);
+    }
+    if(this->periodic==HUSKY_FEED_NOTPERIODIC_TIME)
+        strcat(to_ret,"Not Periodic \r \n");
+    else
+        strcat(to_ret,"Periodic \r \n");
+#else
+    sprintf(to_ret," Mode: %s \n Quantity %u \n NumDeadlines  :%u \n Deadlines: \n ",
         mode_to_cstr(this->mode),this->food_quantity,this->deadlines_num);
     for(idx=0;idx<this->deadlines_num;idx++){
         sprintf(temp,"idx: %u h: %u m: %u s: %u \n ",idx,
@@ -66,6 +79,7 @@ void HuskyFeed_CFG::to_cstring(char* const to_ret){
         strcat(to_ret,"Not Periodic \n");
     else
         strcat(to_ret,"Periodic \n");
+#endif
 }
 void HuskyFeeder::changeCFG(const struct HuskyFeed_CFG& to_set){
 	//	Sets the new configuration
@@ -123,7 +137,11 @@ bool HuskyFeeder::setPresenceManager(HFeed_PresenceManager* manager){
 
 //	Serve food to the dog.
 void HuskyFeeder::exec_serving(){
-
+#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_SERVING_DBG
+	char dbg[128];
+	sprintf(dbg,"[SERVING] Entering \r \n");
+	HAL_UART_Transmit(&huart2,(uint8_t *) dbg, strlen(dbg), 100);
+#endif
 	//	This should never happen but better check than not
 	if(this->current_state!=HFeed_State::SERVING)
 		return;
@@ -144,52 +162,91 @@ void HuskyFeeder::exec_serving(){
 	HFEED_SERVO_TURN_90();
 	// Waits until the time
 	while (actual_weight<final_weight && start_time<end_time){
-
+#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_SERVING_DBG
+		sprintf(dbg,"[SERVING] Waiting at %lu \r \n",start_time);
+		HAL_UART_Transmit(&huart2,(uint8_t *) dbg, strlen(dbg), 100);
+#endif
 		// Perform a weighting, in case it fails returns
 		if(!this->weight_manager->get_measure(weight_ms, actual_weight, this->weight_samples)){
-			// ERROR Should set an error here
-			HFEED_SERVO_SET_ORIG();
-			return ;
+			goto serving_end;
 		}
 		start_time=HFEED_TIME_GET_CURR_MILLIS;
 	}
-	HFEED_SERVO_SET_ORIG();
+	serving_end: HFEED_SERVO_SET_ORIG();
 	//	ERROR, should do a check here
 
 	//	Now updating state
 	if (this->current_configuration.mode!=HFEED_MODE_TIME)
 		this->hf_reset();
-
+	else{
+		this->current_state=HFeed_State::WAIT_FOR_DEADLINE;
+	}
+#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_SERVING_DBG
+	sprintf(dbg,"[SERVING] Exiting \r \n");
+	HAL_UART_Transmit(&huart2, (uint8_t*)dbg, strlen(dbg), 100);
+#endif
 }
 
 // Waits until the next dealine and then serve the dog
 void HuskyFeeder::exec_wait_for_deadline(){
-	if(this->current_state!=HFeed_State::SERVING)
+
+	if(this->current_state!=HFeed_State::WAIT_FOR_DEADLINE)
 		return ;
 	if(this->time_manager==0)
 		return ;
+
+#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_DEADLINE_DBG
+	char dbg[128];
+	sprintf(dbg,"[WAIT_FOR DEADLINE] Entering \r \n");
+	HAL_UART_Transmit(&huart2,(uint8_t *) dbg, strlen(dbg), 100);
+#endif
+
 	if(this-> time_manager->is_greater(current_configuration.deadlines_hours[deadline_ctr],current_configuration.deadlines_minutes[deadline_ctr],current_configuration.deadlines_seconds[deadline_ctr])){
 		// update the deadline and the state
 		this->deadline_ctr++;
+
+#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_DEADLINE_DBG
+		sprintf(dbg,"[WAIT_FOR DEADLINE] Going to serve deadline %u at %lu \r \n",this->deadline_ctr-1,HFEED_TIME_GET_CURR_MILLIS);
+		HAL_UART_Transmit(&huart2,(uint8_t *) dbg, strlen(dbg), 200);
+#endif
 		//	In case we ended the deadline number
 		if(this->deadline_ctr==this->current_configuration.deadlines_num){
+
 			//	reset the counter if we must restart the next day, the mode should not be changed
 			if(this->current_configuration.periodic>0){
+#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_DEADLINE_DBG
+				sprintf(dbg,"[WAIT_FOR DEADLINE] DEADLINE ENDED  PERIODIC \r \n ");
+				HAL_UART_Transmit(&huart2,(uint8_t *) dbg, strlen(dbg), 200);
+#endif
 				deadline_ctr=0;
 				// HERE WE SHOULD PUT A NEW CONFIGURATION FOR TIME MANAGER FOR MIDNIGHT
 			}
-			else
+			else{
+#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_DEADLINE_DBG
+				sprintf(dbg,"[WAIT_FOR DEADLINE] DEADLINE ENDED NO PERIODIC \r \n");
+				HAL_UART_Transmit(&huart2,(uint8_t *) dbg, strlen(dbg), 200);
+#endif
 				//	If it is not periodic then set blank mode in order to reset the Configuration from the serving mode
 				this->current_configuration.mode=HFEED_MODE_BLANK;
+			}
 		}
 		this->current_state=HFeed_State::SERVING;
 		this->exec_serving();
 	}
 
+#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_DEADLINE_DBG
+	else{
+		sprintf(dbg,"[WAIT_FOR DEADLINE] LEAVING WITHOUT EXECUTING %lu \r \n",HFEED_TIME_GET_CURR_MILLIS);
+		HAL_UART_Transmit(&huart2,(uint8_t *) dbg, strlen(dbg), 200);
+	}
+#endif
+
 }
 
 // Waits until the dog comes close and then serve the food
 void HuskyFeeder::exec_wait_for_BAUBAU(){
+	if(this->current_state!=HFeed_State::WAIT_FOR_LOPPIDEH)
+		return ;
 	if (this->presence_manager==0)
 		return ;
 	if(this->presence_manager->is_dog_present()){

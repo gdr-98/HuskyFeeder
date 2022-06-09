@@ -24,10 +24,9 @@
 /* USER CODE BEGIN Includes */
 #define TIME_TEST 	0
 #define WEIGHT_TEST 0
-#define BALANCE_OFFSET	8584000 //Measuring done in Antonio's room desk , with a plate of 125 grams and a known obj of 188 grams
-#define BALANCE_RATIO	2.56
+#define BALANCE_OFFSET	8378200 //Measuring done in Antonio's room desk , with a plate of 125 grams and a known obj of 230 grams
+#define BALANCE_RATIO	100
 #define RUN_APP			1
-
 
 #include "huskyFeed.h"
 #include "hx711_driver.h"
@@ -58,13 +57,16 @@ UART_HandleTypeDef huart2;
 #if RUN_APP
 
 //Dbg flags and utils
-#define APP_DBG	1
+#define APP_DBG	0
 #if APP_DBG
-char dbg_buff[256];
+char dbg_buff[1024];
 #endif
 
+#define APP_TEST_1			0
+#define APP_TEST_2			0
+#define APP_TEST_DEADLINES 	1
 //Calibration flag
-#define CALIBRATION 1
+#define CALIBRATION 0
 #if CALIBRATION
 double avg=0;
 bool valid=false;
@@ -135,16 +137,16 @@ int main(void)
   	  hcsr04_driver hcsr04_driver(HCSR04_TRIGGER_GPIO_Port,HCSR04_TRIGGER_Pin);
 
   	  //Weight sensor D7-D8 8 (PA8 PA9) DOUT SCK
-  	  //Load Cell Connections: White A- Green A+ Black E- Red E+
+  	  //Load Cell Connections: White A- Green A+ Black E- Red E+ (I've actually inverted white and green)
   	  HX711_Driver hx711_driver(HX711_PD_SCK_GPIO_Port,HX711_PD_SCK_Pin,HX_711_DOUT_GPIO_Port,HX_711_DOUT_Pin,CFG_IN_A_GAIN_128);
   	  hx711_driver.hx711_hal_stm42_set_timer(&htim7);
   	  hx711_driver.reset();
   	  hx711_driver.set_intercept(BALANCE_OFFSET);
   	  hx711_driver.set_gradient(BALANCE_RATIO);
 
-  	  //Motor
-  	  HFEED_SERVO_MCU_SET_PWM_CFG(&htim11);
-  	  HFEED_SERVO_MCU_SET_TIMCH(TIM_CHANNEL_1);
+  	  //Motor, BROWN GND RED 5v Orange PWM
+  	  //HFEED_SERVO_MCU_SET_PWM_CFG(&htim11);
+  	  //HFEED_SERVO_MCU_SET_TIMCH(TIM_CHANNEL_1);
 
   	  // Defining Managers
   	  HFeed_WeightManager weight_manager;
@@ -176,6 +178,36 @@ int main(void)
 	  sprintf(dbg_buff," Configuration done \r\n");
 	  HAL_UART_Transmit(&huart2, (uint8_t*)dbg_buff, strlen(dbg_buff), 50);
 #endif
+#if APP_TEST_2
+	 struct HuskyFeed_CFG base_cfg={
+			 .mode=HFEED_MODE_MANUAL,
+			 .food_quantity=45,
+			 .deadlines_num=0,
+			 .deadlines_hours={0},
+			 .deadlines_minutes={0},
+			 .deadlines_seconds={0},
+			 .starting_hours=11,
+			 .starting_minutes=25,
+			 .starting_seconds=0,
+			 .periodic=0,
+	 };
+#endif
+#if APP_TEST_DEADLINES
+	 struct HuskyFeed_CFG deadlines_cfg={
+			 .mode=HFEED_MODE_TIME,
+			 .food_quantity=45,
+			 .deadlines_num=3,
+			 .deadlines_hours={15,15,15},
+			 .deadlines_minutes={2,3,4},
+			 .deadlines_seconds={0},
+			 .starting_hours=15,
+			 .starting_minutes=1,
+			 .starting_seconds=0,
+			 .periodic=0,
+
+	 };
+	 app.changeCFG(deadlines_cfg);
+#endif
 #endif
   /*************** END APP CONFIG********************/
   /* USER CODE END 2 */
@@ -184,7 +216,11 @@ int main(void)
   while (1)
   {
 	  /* USER CODE END WHILE */
+
+	  // In case we must run the app
 #if RUN_APP
+
+	  /***** CALIBRATION CODE ******/
 #if CALIBRATION
 	  avg=hx711_driver.read_avg(100, valid,10);
 	  if (valid){
@@ -200,8 +236,49 @@ int main(void)
 #endif
 	  }
 #endif
-	  HAL_GPIO_TogglePin(BOARD_LED_GPIO_Port, BOARD_LED_Pin);
-	  HAL_Delay(100);
+
+	  /**** BASIC TESTS ****/
+#if APP_TEST_1 && APP_DBG
+	  sprintf(dbg_buff, "The app current state  is %u \r \n" ,app.current_state);
+	  HAL_UART_Transmit(&huart2, (uint8_t*)dbg_buff, strlen(dbg_buff), 100);
+#endif
+	  /***** SERVIG TESTS***/
+#if APP_TEST_2
+	  	  app.serving_timeout_ms=10000;
+#if APP_DBG
+	  	  app.to_cstring(dbg_buff);
+	  	  HAL_UART_Transmit(&huart2, (uint8_t*)dbg_buff, strlen(dbg_buff), 150);
+	  	  HAL_Delay(1000);
+#endif
+	  app.changeCFG(base_cfg);
+#if APP_DBG
+	  	  app.to_cstring(dbg_buff);
+	  	  HAL_UART_Transmit(&huart2, (uint8_t*)dbg_buff, strlen(dbg_buff), 150);
+	  	  HAL_Delay(1000);
+#endif
+	  app.exec_state();
+#endif
+	  /***** DEADLINE TESTS***/
+#if APP_TEST_DEADLINES
+	  app.serving_timeout_ms=10000;
+
+#if APP_DBG
+	  	  app.to_cstring(dbg_buff);
+	  	  HAL_UART_Transmit(&huart2, (uint8_t*)dbg_buff, strlen(dbg_buff), 300);
+	  	  HAL_Delay(1000);
+#endif
+
+	  //app.changeCFG(deadlines_cfg);
+
+#if APP_DBG
+	  	  app.to_cstring(dbg_buff);
+	  	  HAL_UART_Transmit(&huart2, (uint8_t*)dbg_buff, strlen(dbg_buff), 300);
+	  	  HAL_Delay(1000);
+#endif
+	  	app.exec_state();
+#endif
+	  	HAL_GPIO_TogglePin(BOARD_LED_GPIO_Port, BOARD_LED_Pin);
+	  	HAL_Delay(100);
 #endif
     /* USER CODE BEGIN 3 */
   }
@@ -310,7 +387,7 @@ static void MX_TIM11_Init(void)
 
   /* USER CODE END TIM11_Init 1 */
   htim11.Instance = TIM11;
-  htim11.Init.Prescaler = 1680;
+  htim11.Init.Prescaler = 1680-1;
   htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim11.Init.Period = 1000-1;
   htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -454,6 +531,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 /* USER CODE END 4 */
 
 /**
@@ -487,3 +565,4 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+

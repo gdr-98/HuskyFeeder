@@ -2,6 +2,15 @@
 #define HUSKY_FEED
 
 #include "includes.h"
+#define HFEED_GLOBAL_DEBUGGER 1
+#define HFEED_DEBUGGING	1
+#if HFEED_GLOBAL_DEBUGGER
+#include "main.h"
+extern UART_HandleTypeDef huart2;
+#endif
+#define HFEED_SERVING_DBG	1
+#define HFEED_DEADLINE_DBG	1
+#define HFEED_UART_FMT	1
 /****************
  *  FILE DESCR:
  *      This file contains definitions, constant, function prototypes for Husky Feeder App.
@@ -178,11 +187,21 @@ class HuskyFeeder{
         inline void to_cstring(char * const k){
             //flushes the string
             memset(k,0,strlen(k));
+#if HFEED_UART_FMT
+            strcat(k,"CFG: \r \n");
+#else
             strcat(k,"CFG: \n");
+#endif
             this->current_configuration.to_cstring(k);
-            strcat(k,"STATE: \n");
+#if HFEED_UART_FMT
+            strcat(k,"STATE: \r \n");
+#else
+            strcat(k,"STATE: \r \n");
+#endif
             strcat(k,state_to_cstr(this->current_state));
-
+#if HFEED_UART_FMT
+            strcat(k,"\r \n");
+#endif
         }
         void changeCFG(const struct HuskyFeed_CFG& to_set);
 

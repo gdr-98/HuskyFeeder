@@ -45,28 +45,14 @@ const	dg_to_pwm[]={
 //	In STM32 Ton == CCR counter values
 #define HFEED_SERVO_DEG2TON(angle)	angle
 
-static	TIM_HandleTypeDef*	my_timer;
-static	uint16_t			stm32_tim_channel;
-
-//	On stm32 this macro takes the tim cfg in input, the timer should be already configured and started with HAL PWM STARTs
-#define	HFEED_SERVO_MCU_SET_PWM_CFG(cfg){	\
-		if(cfg==0)							\
-			Error_Handler();				\
-		my_timer=cfg;						\
-}
-
-//	Function specific for stm32 implementation
-#define	HFEED_SERVO_MCU_SET_TIMCH(timCH){	\
-	if(timCH!=TIM_CHANNEL_1 &&timCH!=TIM_CHANNEL_2 && timCH!=TIM_CHANNEL_3 && timCH!=TIM_CHANNEL_4)	\
-		Error_Handler();																				\
-	stm32_tim_channel=timCH;																		\
-}
+extern	TIM_HandleTypeDef htim11;
+#define	stm32_tim_channel TIM_CHANNEL_1
 
 //	Macros used from the write functions, every MCU port must implement these two
 //	Checks if the angle is valid according to MCU definitions
-#define HFEED_SERVO_VALID_ANGLE(angle)	(angle>=ZERO_DG && angle<=ONEHUNTWELVE_DG)
+#define HFEED_SERVO_VALID_ANGLE(angle)	(angle>=HFEED_SERVO_ZERO_DG && angle<=HFEED_SERVO_ONEHUNTWELVE_DG)
 //	Sets a specific pwm
-#define	HFEED_SERVO_MCU_SET_Ton(Ton)	 __HAL_TIM_SET_COMPARE(my_timer,stm32_tim_channel,Ton)
+#define	HFEED_SERVO_MCU_SET_Ton(Ton)	 __HAL_TIM_SET_COMPARE(&htim11,stm32_tim_channel,Ton)
 
 #endif
 
@@ -80,3 +66,18 @@ static	uint16_t			stm32_tim_channel;
 }
 
 #endif
+/*
+ * DEPRECATED
+//	On stm32 this macro takes the tim cfg in input, the timer should be already configured and started with HAL PWM STARTs
+#define	HFEED_SERVO_MCU_SET_PWM_CFG(cfg){	\
+		if(cfg==0)							\
+			Error_Handler();				\
+		my_timer=cfg;						\
+}
+
+//	Function specific for stm32 implementation
+#define	HFEED_SERVO_MCU_SET_TIMCH(timCH){	\
+	if(timCH!=TIM_CHANNEL_1 &&timCH!=TIM_CHANNEL_2 && timCH!=TIM_CHANNEL_3 && timCH!=TIM_CHANNEL_4)	\
+		Error_Handler();																				\
+	stm32_tim_channel=timCH;																		\
+}*/
