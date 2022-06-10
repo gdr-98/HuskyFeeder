@@ -179,7 +179,9 @@ class HuskyFeeder{
         uint16_t				weight_samples=10; // note that the ms to wait refers to only one sample
         // Serving Timeout
         // Waits two minutes, if the reaching
-        uint32_t				serving_timeout_ms=120000;
+        uint32_t				serving_timeout_ms=180000;
+        //	Expressess the uncertainity of a measurement in grams
+        float					weight_uncertainity=3;
         static HuskyFeeder& getFeeder(){
             static HuskyFeeder globalFeeder;
             return globalFeeder;

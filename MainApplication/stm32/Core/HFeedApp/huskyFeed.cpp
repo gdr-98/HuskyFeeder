@@ -137,29 +137,42 @@ bool HuskyFeeder::setPresenceManager(HFeed_PresenceManager* manager){
 
 //	Serve food to the dog.
 void HuskyFeeder::exec_serving(){
-#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_SERVING_DBG
-	char dbg[128];
-	sprintf(dbg,"[SERVING] Entering \r \n");
-	HAL_UART_Transmit(&huart2,(uint8_t *) dbg, strlen(dbg), 100);
-#endif
 	//	This should never happen but better check than not
 	if(this->current_state!=HFeed_State::SERVING)
 		return;
 	//	Checking if the weight has been set
 	if(this->weight_manager==0)
 		return;
+
+#if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_SERVING_DBG
+	char dbg[128];
+	sprintf(dbg,"[SERVING] Entering \r \n");
+	HAL_UART_Transmit(&huart2,(uint8_t *) dbg, strlen(dbg), 100);
+#endif
+
 	//	Maybe 32 bits are excessive but as Latin says: " melius abundare quam deficere "
-	uint32_t actual_weight,final_weight=(uint32_t)this->current_configuration.food_quantity;
+	//	UPDATE 10 June 2022: Added uncertainity (- weight_uncertainity)
+	uint32_t actual_weight,final_weight=(uint32_t)this->current_configuration.food_quantity-(uint32_t)this->weight_uncertainity;
 	// problem in reading, should set an ERROR
 	if(!this->weight_manager->get_measure(weight_ms,actual_weight, this->weight_samples))
 		return ;
-	// Final= desired_food+ actual value
-	final_weight+=actual_weight;
+
+	// 	Final= desired_food+ actual value
+	// 	This should be removed from here,  in case there are already the specific quantity of grams.
+	// 	Whas these instructions done is basically a tare that should be handled somewhere else
+	//	final_weight+=actual_weight;
+	// 	For the same reason I've added the check before the motor turning and the while
+
 	uint32_t start_time=HFEED_TIME_GET_CURR_MILLIS;
 	uint32_t end_time=start_time+this->serving_timeout_ms;
+
+	if (actual_weight>=final_weight)
+		goto serving_update;
+
 	// Resets the servo and turn 90 degrees
 	HFEED_SERVO_SET_ORIG();
 	HFEED_SERVO_TURN_90();
+
 	// Waits until the time
 	while (actual_weight<final_weight && start_time<end_time){
 #if HFEED_DEBUGGING && HFEED_GLOBAL_DEBUGGER && HFEED_SERVING_DBG
@@ -176,7 +189,7 @@ void HuskyFeeder::exec_serving(){
 	//	ERROR, should do a check here
 
 	//	Now updating state
-	if (this->current_configuration.mode!=HFEED_MODE_TIME)
+	serving_update: if (this->current_configuration.mode!=HFEED_MODE_TIME)
 		this->hf_reset();
 	else{
 		this->current_state=HFeed_State::WAIT_FOR_DEADLINE;

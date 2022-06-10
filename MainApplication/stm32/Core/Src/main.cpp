@@ -24,8 +24,8 @@
 /* USER CODE BEGIN Includes */
 #define TIME_TEST 	0
 #define WEIGHT_TEST 0
-#define BALANCE_OFFSET	8378200 //Measuring done in Antonio's room desk , with a plate of 125 grams and a known obj of 230 grams
-#define BALANCE_RATIO	100
+#define BALANCE_OFFSET	8223540 //Measuring done in Antonio's room desk ,know obj of 230 grams
+#define BALANCE_RATIO	474		//(8332500-8223540)/230
 #define RUN_APP			1
 
 #include "huskyFeed.h"
@@ -181,7 +181,7 @@ int main(void)
 #if APP_TEST_2
 	 struct HuskyFeed_CFG base_cfg={
 			 .mode=HFEED_MODE_MANUAL,
-			 .food_quantity=45,
+			 .food_quantity=70,
 			 .deadlines_num=0,
 			 .deadlines_hours={0},
 			 .deadlines_minutes={0},
@@ -195,7 +195,7 @@ int main(void)
 #if APP_TEST_DEADLINES
 	 struct HuskyFeed_CFG deadlines_cfg={
 			 .mode=HFEED_MODE_TIME,
-			 .food_quantity=45,
+			 .food_quantity=70,
 			 .deadlines_num=3,
 			 .deadlines_hours={15,15,15},
 			 .deadlines_minutes={2,3,4},
@@ -222,7 +222,7 @@ int main(void)
 
 	  /***** CALIBRATION CODE ******/
 #if CALIBRATION
-	  avg=hx711_driver.read_avg(100, valid,10);
+	  avg=hx711_driver.read_avg(100, valid,50);
 	  if (valid){
 #if APP_DBG
 		  sprintf(dbg_buff," Value %.4f %.4f Converted  \r\n",avg, (avg-BALANCE_OFFSET)/BALANCE_RATIO);
